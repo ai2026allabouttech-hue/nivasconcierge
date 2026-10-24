@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kadamba Concierge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --stone:#F1F2ED;
+  --paper:#FFFFFF;
+  --ink:#12302A;
+  --ink-soft:#4A5F58;
+  --line:#DFE1D9;
+  --brass:#A8823C;
+  --moss:#2F6B57;
+  --bubble:#E9EAE2;
+  --alert:#B4552F;
+  --shadow:rgba(18,48,42,.10);
+  --serif:"Cormorant Garamond",Georgia,serif;
+  --sans:"Karla",-apple-system,Segoe UI,sans-serif;
+  /* fixed chrome surface: header bar, sent bubbles, primary buttons.
+     stays dark with light text in BOTH themes — never redefined below,
+     so it can't collide with --ink flipping light in dark mode. */
+  --deep:#12302A;
+  --on-deep:#F1F2ED;
+  /* room actions get their own colors — kept separate from --alert/--moss
+     (which mean "needs attention" / "done" on a ticket) so a room action
+     never looks like a ticket action at a glance. */
+  --teal:#2A6E82;
+  --slate:#6B7280;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --stone:#0E1512;--paper:#16201C;--ink:#E8EDE9;--ink-soft:#9BAAA3;
+    --line:#27332E;--brass:#C9A35C;--moss:#4E9A80;--bubble:#1E2A25;
+    --alert:#D2734B;--shadow:rgba(0,0,0,.4);--teal:#4E9AB4;--slate:#8B95A1;
+  }
+}
+:root[data-theme="dark"]{
+  --stone:#0E1512;--paper:#16201C;--ink:#E8EDE9;--ink-soft:#9BAAA3;
+  --line:#27332E;--brass:#C9A35C;--moss:#4E9A80;--bubble:#1E2A25;
+  --alert:#D2734B;--shadow:rgba(0,0,0,.4);--teal:#4E9AB4;--slate:#8B95A1;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--stone);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  min-height:100vh;padding:20px 14px 40px;
+}
+img{max-width:100%}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- demo shell ---------- */
+.shell{max-width:1120px;margin:0 auto}
+.shell-head{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between;margin-bottom:18px}
+.shell-head h1{font-family:var(--serif);font-weight:500;font-size:26px;letter-spacing:.01em}
+.shell-head p{color:var(--ink-soft);font-size:13px;max-width:52ch}
+.switch{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.switch button{padding:7px 15px;border-radius:999px;font-size:13px;font-weight:600;color:var(--ink-soft)}
+.switch button[aria-pressed="true"]{background:var(--deep);color:var(--on-deep)}
+.stage{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:26px;align-items:start}
+/* wide screens show both sides at once, so the switcher isn't needed */
+@media (min-width:861px){.switch{display:none}}
+@media (max-width:860px){
+  .stage{grid-template-columns:1fr}
+  .is-hidden{display:none}
+}
+
+/* ---------- phone ---------- */
+.phone{
+  background:var(--paper);border:1px solid var(--line);border-radius:26px;
+  box-shadow:0 14px 40px var(--shadow);overflow:hidden;
+}
+/* Guest scanning a real room QR: no reception panel, so don't leave its
+   empty grid column sitting there — just center the phone nicely. */
+.guest-only .stage{display:block}
+.guest-only .phone{max-width:420px;margin:0 auto}
+.phone-top{
+  background:var(--deep);color:var(--on-deep);padding:12px 16px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.wordmark{font-family:var(--serif);font-size:21px;letter-spacing:.22em;line-height:1}
+.wordmark small{display:block;font-family:var(--sans);font-size:8px;letter-spacing:.16em;opacity:.65;margin-top:4px}
+.whoami{text-align:right;font-size:11px;line-height:1.35;opacity:.85}
+.whoami b{display:block;font-size:13px;font-weight:600;opacity:1}
+.call-btn{background:rgba(255,255,255,.12);border-radius:50%;width:34px;height:34px;display:grid;place-items:center;font-size:15px}
+.feed{padding:16px 14px 8px;display:flex;flex-direction:column;gap:12px}
+
+.msg{max-width:88%;background:var(--bubble);border-radius:4px 16px 16px 16px;padding:12px 14px;font-size:13.5px}
+.msg b{font-weight:700}
+.msg.me{align-self:flex-end;background:var(--deep);color:var(--on-deep);border-radius:16px 4px 16px 16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+.chip{
+  background:var(--paper);border:1px solid var(--line);border-radius:999px;
+  padding:8px 15px 8px 9px;font-size:12.5px;font-weight:600;
+  display:inline-flex;align-items:center;gap:8px;
+  transition:border-color .15s, transform .1s;
+}
+.chip:active{transform:scale(0.97)}
+.chip-icon{
+  width:26px;height:26px;border-radius:50%;background:var(--bubble);
+  display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
+}
+.chip:hover{border-color:var(--brass);color:var(--brass)}
+
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px;font-size:13px}
+.panel h3{font-family:var(--serif);font-size:19px;font-weight:600;margin-bottom:9px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border:none}
+.kv span:first-child{color:var(--ink-soft)}
+.kv span:last-child{font-weight:600;text-align:right}
+
+/* housekeeping */
+.acc{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:8px;background:var(--paper)}
+.acc-head{width:100%;display:flex;justify-content:space-between;align-items:center;padding:11px 13px;font-weight:600;font-size:13.5px;text-align:left}
+.acc-head .count{color:var(--brass);font-size:12px;font-weight:700}
+.acc-body{display:none;padding:0 13px 10px}
+.acc.open .acc-body{display:block}
+.acc.open .acc-head{border-bottom:1px solid var(--line);margin-bottom:9px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;font-size:13px}
+.row-label{display:flex;align-items:center;gap:10px}
+.row-icon{
+  width:34px;height:34px;border-radius:10px;background:var(--bubble);
+  display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;
+}
+.step{display:flex;align-items:center;gap:4px}
+.step button{width:27px;height:27px;border-radius:8px;background:var(--bubble);font-weight:700;line-height:1;display:grid;place-items:center}
+.step button:disabled{opacity:.35;cursor:default}
+.step output{min-width:22px;text-align:center;font-weight:700;font-size:13px}
+textarea{
+  width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;
+  font:inherit;font-size:13px;background:var(--paper);color:var(--ink);resize:vertical;min-height:62px;
+}
+.send{
+  width:100%;background:var(--deep);color:var(--on-deep);border-radius:11px;
+  padding:13px;font-weight:700;font-size:14px;margin-top:10px;
+}
+.send:disabled{opacity:.4;cursor:not-allowed}
+.back{font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;align-self:flex-start}
+
+/* guide */
+.place{border:1px solid var(--line);border-radius:14px;padding:13px;background:var(--paper);margin-bottom:9px}
+.place-top{display:flex;justify-content:space-between;gap:9px;align-items:start;margin-bottom:6px}
+.place h4{font-family:var(--serif);font-size:18px;font-weight:600;line-height:1.15}
+.tag{background:var(--bubble);color:var(--ink-soft);border-radius:6px;padding:3px 8px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.place p{font-size:12.5px;color:var(--ink-soft);margin-bottom:10px}
+.place-actions{display:flex;gap:8px;align-items:center}
+.pill-dark{background:var(--deep);color:var(--on-deep);border-radius:999px;padding:7px 15px;font-size:12px;font-weight:600;display:inline-block;text-decoration:none}
+.pill-ghost{color:var(--brass);font-size:12px;font-weight:600}
+
+/* bottom tiles */
+.tiles{position:sticky;bottom:0;border-top:1px solid var(--line);background:var(--paper);padding:10px 12px 12px;z-index:2}
+.tiles-label{font-size:9.5px;letter-spacing:.14em;color:var(--ink-soft);margin-bottom:8px}
+.tile-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.tile{
+  background:var(--bubble);border-radius:10px;padding:10px 10px 10px 12px;
+  font-size:12.5px;font-weight:600;text-align:left;border-left:3px solid transparent;
+}
+.tile[aria-current="true"]{background:var(--deep);color:var(--on-deep);border-left-color:transparent}
+/* each destination gets its own accent so the four tiles read as four
+   distinct places to go, not one repeated shape */
+.tile[data-tile="house"]  { border-left-color:var(--brass); }
+.tile[data-tile="services"]{ border-left-color:var(--moss); }
+.tile[data-tile="guide"]  { border-left-color:var(--teal); }
+.tile[data-tile="contacts"]{ border-left-color:var(--alert); }
+
+/* ---------- reception desk ---------- */
+.desk{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 30px var(--shadow);overflow:hidden}
+.desk-top{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;padding:15px 18px;border-bottom:1px solid var(--line)}
+.desk-top h2{font-family:var(--serif);font-size:23px;font-weight:600}
+.desk-top .sub{font-size:12px;color:var(--ink-soft)}
+.counts{display:flex;gap:16px}
+.counts div{text-align:right}
+.counts b{display:block;font-size:20px;font-family:var(--serif)}
+.counts span{font-size:10.5px;color:var(--ink-soft)}
+.desk-body{padding:16px 18px;max-height:600px;overflow-y:auto;display:flex;flex-direction:column;gap:11px}
+.empty{text-align:center;padding:44px 20px;color:var(--ink-soft);font-size:13.5px}
+.empty b{display:block;font-family:var(--serif);font-size:20px;color:var(--ink);margin-bottom:5px;font-weight:600}
+
+.ticket{border:1px solid var(--line);border-left:4px solid var(--alert);border-radius:12px;padding:13px 15px;background:var(--paper)}
+.ticket.accepted{border-left-color:var(--brass)}
+.ticket.done{border-left-color:var(--moss);opacity:.62}
+.t-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:7px}
+.t-head h4{font-size:14px;font-weight:700}
+.t-room{font-size:11.5px;color:var(--ink-soft)}
+.t-items{list-style:none;font-size:13px;margin-bottom:8px}
+.t-items li{padding:2px 0}
+.t-items li::before{content:"·";margin-right:7px;color:var(--brass);font-weight:700}
+.t-note{font-size:12.5px;color:var(--ink-soft);font-style:italic;margin-bottom:8px}
+.t-log{font-size:11px;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:12px;margin-bottom:9px}
+.t-actions{display:flex;gap:8px;align-items:center}
+.btn-accept{background:var(--alert);color:#fff;border-radius:9px;padding:8px 17px;font-size:12.5px;font-weight:700}
+.btn-done{background:var(--moss);color:#fff;border-radius:9px;padding:8px 17px;font-size:12.5px;font-weight:700}
+.status{font-size:11.5px;font-weight:700;color:var(--moss)}
+.toast{
+  position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+  background:var(--deep);color:var(--on-deep);padding:11px 20px;border-radius:999px;
+  font-size:13px;font-weight:600;box-shadow:0 8px 24px var(--shadow);z-index:50;
+}
+.note{font-size:12px;color:var(--ink-soft);margin-top:14px;max-width:60ch}
+
+/* rooms panel */
+.rooms{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 30px var(--shadow);overflow:hidden;margin-bottom:18px}
+.rooms-body{padding:14px 18px;display:flex;flex-direction:column;gap:9px}
+.room-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.room-row:last-child{border:none}
+.room-num{font-family:var(--serif);font-size:19px;font-weight:600;min-width:44px}
+.room-status{flex:1;font-size:12.5px}
+.room-status b{display:block;font-size:13.5px;font-weight:700}
+.room-status span{color:var(--ink-soft)}
+.room-empty-tag{color:var(--ink-soft);font-style:italic}
+.room-form{display:flex;gap:7px;align-items:center}
+.room-form input{
+  border:1px solid var(--line);border-radius:8px;padding:7px 10px;
+  font:inherit;font-size:12.5px;background:var(--paper);color:var(--ink);width:150px;
+}
+.btn-checkin{background:var(--teal);color:#fff;border-radius:9px;padding:7px 14px;font-size:12px;font-weight:700;white-space:nowrap}
+.btn-checkout{background:var(--slate);color:#fff;border-radius:9px;padding:7px 14px;font-size:12px;font-weight:700;white-space:nowrap}
+
+.login-panel{max-width:420px;margin:0 auto}
+.login-body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px}
+.login-body input{
+  border:1px solid var(--line);border-radius:9px;padding:11px 13px;
+  font:inherit;font-size:13.5px;background:var(--paper);color:var(--ink);width:100%;
+}
+.gate-hidden{display:none !important}
+
+/* ---------- offers, activities, feedback (guest) ---------- */
+.offer-banner{align-self:stretch;background:var(--deep);color:var(--on-deep);border-radius:16px;padding:14px 16px;border:1px solid var(--brass);display:flex;flex-direction:column;gap:6px}
+.offer-banner small{color:var(--brass);font-weight:700;letter-spacing:.08em;font-size:10.5px}
+.offer-banner h4{font-family:var(--serif);font-size:21px;font-weight:600;line-height:1.15}
+.offer-banner p{font-size:12.5px;opacity:.85}
+.offer-banner button{align-self:flex-start;margin-top:4px;background:var(--brass);color:#fff;border-radius:999px;padding:7px 15px;font-size:12px;font-weight:700}
+.card-sm{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:13px 14px;font-size:13px}
+.card-sm h4{font-family:var(--serif);font-size:19px;font-weight:600}
+.card-sm p{color:var(--ink-soft);margin:3px 0 8px}
+.card-sm .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft)}
+.btn-claim{background:var(--brass);color:#fff;border-radius:999px;padding:7px 15px;font-size:12px;font-weight:700}
+.btn-claim:disabled{background:var(--bubble);color:var(--ink-soft);cursor:default}
+.chip.on{background:var(--deep);color:var(--on-deep);border-color:var(--deep)}
+.stars{display:flex;gap:6px;justify-content:center;margin:6px 0 10px}
+.stars button{font-size:34px;line-height:1;color:var(--line)}
+.stars button.on{color:var(--brass)}
+/* ---------- staff dashboard tabs ---------- */
+.tabs{display:flex;gap:4px;padding:8px 14px 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{padding:9px 14px;font-size:13px;font-weight:700;color:var(--ink-soft);border-bottom:3px solid transparent;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--brass)}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:12px;padding:12px 14px;border-top:4px solid var(--slate)}
+.stat b{display:block;font-family:var(--serif);font-size:30px;line-height:1.1}
+.stat span{font-size:11.5px;color:var(--ink-soft)}
+.stat.s-new{border-top-color:var(--brass)}.stat.s-work{border-top-color:var(--teal)}.stat.s-done{border-top-color:var(--moss)}.stat.s-room{border-top-color:var(--slate)}
+.two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:14px}
+@media (max-width:1000px){.two-col{grid-template-columns:1fr}}
+.block{border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.block h3{font-family:var(--serif);font-size:19px;font-weight:600;margin-bottom:9px}
+.donut-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.donut{width:120px;height:120px;border-radius:50%;position:relative;flex:none}
+.donut::after{content:"";position:absolute;inset:26px;border-radius:50%;background:var(--paper)}
+.legend{font-size:12px;display:flex;flex-direction:column;gap:4px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.mini{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.mini:last-child{border-bottom:none}
+.tile-grid .tile:last-child:nth-child(odd){grid-column:1/-1}
+.mini .badge{align-self:center;flex:none}
+.badge{display:inline-block;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap}
+.b-new{background:var(--brass)}.b-pending{background:var(--slate)}.b-accepted{background:var(--teal)}.b-done{background:var(--moss)}.b-rejected{background:var(--alert)}
+.filters{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:12px}
+.filters .chip{margin:0;padding:6px 12px;font-size:12px}
+.filters .grow{flex:1}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table.tbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}
+.tbl th{text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);padding:9px 10px;border-bottom:1px solid var(--line);background:var(--bubble)}
+.tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl .acts{display:flex;gap:5px;flex-wrap:wrap}
+.btn-sm{border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:700;color:#fff}
+.btn-hold{background:var(--slate)}.btn-rej{background:var(--alert)}
+.btn-plain{border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:700}
+.addform{border:1px solid var(--brass);border-radius:12px;padding:13px 14px;margin-bottom:12px;display:grid;gap:8px}
+.addform label{font-size:11.5px;font-weight:700;color:var(--ink-soft)}
+.addform select,.addform input{border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;background:var(--paper);color:var(--ink);width:100%}
+.reason-row td{background:var(--bubble)}
+.reason-row input{border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit;background:var(--paper);color:var(--ink);width:min(320px,100%)}
+.bar{height:8px;border-radius:99px;background:var(--bubble);overflow:hidden;flex:1}
+.bar i{display:block;height:100%;background:var(--brass)}
+.fb-row{display:flex;align-items:center;gap:8px;font-size:12px;margin:4px 0}
+.localbanner{background:var(--bubble);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--ink-soft);margin-bottom:12px}
+</style>
+<!--
+  FIREBASE SETUP — fill in your own project's config below (see SETUP.md).
+  Until you do, this app runs fine on its own (each device keeps its own
+  local copy) — filling in real config is what turns on live sync between
+  a guest's phone and reception's screen across separate devices.
+-->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+<div class="shell">
+
+  <div class="shell-head">
+    <div>
+      <h1>Kadamba Concierge</h1>
+      <p>A guest scans the QR card in their room, and everything they might ask reception for is one tap away. Requests land at the desk in real time.</p>
+    </div>
+    <div class="switch" role="group" aria-label="Choose view">
+      <button id="btnGuest" aria-pressed="true">Guest phone</button>
+      <button id="btnDesk" aria-pressed="false">Reception desk</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <!-- ============ GUEST ============ -->
+    <div class="phone" id="phoneWrap">
+      <div class="phone-top">
+        <div class="wordmark">KADAMBA<small>BEACH HOUSE · GOA</small></div>
+        <div style="display:flex;align-items:center;gap:9px">
+          <div class="whoami" id="whoami"></div>
+          <button class="call-btn" title="Call reception" onclick="toast('Dialling reception…')">☎</button>
+        </div>
+      </div>
+      <div id="demoPickerRow" style="padding:8px 14px 0;font-size:10.5px;color:var(--ink-soft);display:flex;align-items:center;gap:6px">
+        Demo: scanning QR for room
+        <select id="roomPicker" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;font-size:10.5px;background:var(--paper);color:var(--ink)"></select>
+      </div>
+      <div class="feed" id="feed"></div>
+      <div class="tiles">
+        <div class="tiles-label">Tap what you need</div>
+        <div class="tile-grid" id="tiles"></div>
+      </div>
+    </div>
+
+    <!-- ============ DESK ============ -->
+    <div class="desk-wrap is-hidden" id="deskWrap">
+
+      <!-- Shown when Firebase Auth is set up and no one's signed in on this
+           device yet. Guests never see this — only reception. -->
+      <div class="desk login-panel gate-hidden" id="deskLogin">
+        <div class="desk-top">
+          <div>
+            <h2>Reception sign-in</h2>
+            <div class="sub">Staff only — guests never need to sign in</div>
+          </div>
+        </div>
+        <div class="login-body">
+          <input type="email" id="loginEmail" placeholder="Staff email" autocomplete="username">
+          <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+          <button class="send" id="loginSubmit" style="margin-top:4px">Sign in</button>
+          <p class="note" id="loginError" style="color:var(--alert);display:none"></p>
+          <p class="note">Ask whoever set this property up for a staff login — see SETUP.md, Step 2.5.</p>
+        </div>
+      </div>
+
+      <div id="deskContent" class="gate-hidden">
+        <div class="desk">
+          <div class="desk-top">
+            <div>
+              <h2>Reception desk</h2>
+              <div class="sub">Live guest requests · Kadamba Beach House</div>
+            </div>
+            <button class="pill-ghost" id="signOutBtn" style="display:none">Sign out</button>
+          </div>
+          <div class="tabs" id="deskTabs" role="tablist"></div>
+          <div class="desk-body" id="deskBody"></div>
+          <div class="rooms" id="roomsPanel" style="display:none;margin:0 18px 18px">
+            <div class="rooms-body" id="roomsBody"></div>
+          </div>
+        </div>
+        <p class="note">Send a request from the guest phone and watch it appear here. Accept it, then mark it completed — the guest sees each step.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   DATA — everything a hotel would edit for their own property
+   ============================================================ */
+var HOTEL = { name:"Kadamba Beach House" };
+
+/* Every room the property has. Each room is either empty (no one checked
+   in — "vacant") or has a current guest. This is reception's registry:
+   the same information they'd already keep in their real front-desk
+   system, entered here too so the app knows who's currently in a room. */
+var ROOMS = [
+  { room:"101", guest:null,        checkedInAt:null },
+  { room:"204", guest:"Anaya Rao", checkedInAt:"9:10 AM" },
+  { room:"310", guest:null,        checkedInAt:null }
+];
+
+/* In production, each room's printed QR code links straight to this page
+   with its own room baked into the URL — e.g. yourdomain.com/?room=204 —
+   so it never needs to change. Reading it here means one file serves
+   every room; you just print a different link for each door.
+   No ?room= in the URL (opening the page directly, for testing) falls
+   back to the on-screen picker below so you can still try every room. */
+var ROOM_FROM_URL = new URLSearchParams(window.location.search).get("room");
+var ACTIVE_ROOM = ROOM_FROM_URL || "204";
+
+function currentGuestRoom(){
+  return ROOMS.find(function(r){ return r.room === ACTIVE_ROOM; }) || ROOMS[0];
+}
+
+/* A real printed room QR always has ?room= in its link. Anyone opening
+   one of those should only ever see the guest phone screen — never a
+   button that lets them peek at or switch to reception. That toggle
+   (and the reception panel itself) only has a reason to exist on the
+   plain, no-room link that staff use internally. This runs immediately,
+   unconditionally — not just on narrow screens — so it can't be missed
+   by a guest on a wide-screen device either. */
+if(ROOM_FROM_URL){
+  var swEl = document.querySelector(".switch");
+  var deskEl = document.getElementById("deskWrap");
+  if(swEl) swEl.style.display = "none";
+  if(deskEl) deskEl.style.display = "none";
+  var shellEl = document.querySelector(".shell");
+  if(shellEl) shellEl.classList.add("guest-only");
+}
+
+var HOUSE_INFO = [
+  ["Wi-Fi network","Kadamba_Guest"],
+  ["Wi-Fi password","seaview204"],
+  ["Breakfast","8:00 AM – 10:30 AM"],
+  ["Restaurant","12:30 PM – 10:30 PM"],
+  ["Spa","11:00 AM – 9:00 PM"],
+  ["Pool cleaning","9:00 AM – 11:00 AM"],
+  ["Check-out","11:00 AM"]
+];
+
+function item(name, icon){ return { name:name, icon:icon }; }
+
+var HOUSEKEEPING = [
+  { group:"Bedding & linen", items:[item("Extra pillow","🛏️"), item("Blanket","🧣"), item("Bedsheet change","🛌")] },
+  { group:"Towels",          items:[item("Bath towel","🧖"), item("Hand towel","🤲"), item("Pool towel","🏖️")] },
+  { group:"Personal care",   items:[item("Shaving kit","🪒"), item("Toothbrush kit","🪥"), item("Shampoo","🧴"), item("Soap","🧼")] },
+  { group:"Tea & coffee",    items:[item("Coffee capsule","☕"), item("Tea bag","🍵"), item("Sugar sachet","🧂"), item("Milk sachet","🥛")] },
+  { group:"Room extras",     items:[item("Drinking water","💧"), item("Ice bucket","🧊"), item("Hangers","👔"), item("Slippers","🩴")] }
+];
+
+var RESTAURANT = [
+  { group:"Starters",  items:[item("Veg spring rolls","🥟"), item("Chicken satay","🍢"), item("Paneer tikka","🧀")] },
+  { group:"Mains",     items:[item("Butter chicken","🍛"), item("Veg biryani","🍚"), item("Margherita pizza","🍕"), item("Grilled fish","🐟")] },
+  { group:"Beverages", items:[item("Fresh lime soda","🥤"), item("Masala chai","🫖"), item("Cold coffee","🧋")] }
+];
+
+var MINIBAR = [
+  { group:"Drinks", items:[item("Bottled water","💧"), item("Soft drink","🥤"), item("Beer","🍺"), item("Red wine","🍷")] },
+  { group:"Snacks", items:[item("Chips","🥔"), item("Chocolate bar","🍫"), item("Mixed nuts","🥜")] }
+];
+
+var LAUNDRY = [
+  { group:"Wash & fold", items:[item("Shirt","👔"), item("Trousers","👖"), item("T-shirt","👕"), item("Bedsheet","🛏️")] },
+  { group:"Dry clean",   items:[item("Suit","🤵"), item("Saree","🥻"), item("Blazer","🧥")] },
+  { group:"Iron only",   items:[item("Shirt","👔"), item("Trousers","👖"), item("Dress","👗")] }
+];
+
+/* Catalog drives every "Tap what you need" category. type "items" gets the
+   quantity-stepper builder (like housekeeping); type "form" gets quick-pick
+   chips plus a note, for requests that aren't about counting things. */
+var CATALOG = {
+  "Housekeeping":     { type:"items", groups:HOUSEKEEPING, intro:function(g){ return "What shall I send up to room " + g.room + "?"; } },
+  "Restaurant":       { type:"items", groups:RESTAURANT,   intro:"In-room dining — what would you like sent up?" },
+  "Mini bar":         { type:"items", groups:MINIBAR,      intro:function(g){ return "Restock the mini bar in room " + g.room + "?"; } },
+  "Laundry":          { type:"items", groups:LAUNDRY,      intro:"What needs to go to the laundry?" },
+  "Spa":              { type:"form",  intro:"Which treatment, and when suits you?",
+                         chips:["Swedish massage","Deep tissue massage","Facial","Manicure & pedicure"],
+                         placeholder:"Treatment and preferred time…" },
+  "Taxi booking":     { type:"form",  intro:"Where are you headed, and when?",
+                         chips:["Airport drop","Airport pickup","Local sightseeing","Late night pickup"],
+                         placeholder:"Destination and pickup time…" },
+  "Special occasion": { type:"form",  intro:"Celebrating something? Tell us what you have in mind.",
+                         chips:["Birthday cake","Flowers & petals","Room decoration","Photographer"],
+                         placeholder:"Occasion, date and any details…" }
+};
+
+var GUIDE = {
+  "Where to eat":[
+    { name:"Vinayak Family Restaurant", tag:"Goan thali", blurb:"The fish thali locals queue for. Order the kingfish rava fry and go before 1 PM.", km:"4.2 km" },
+    { name:"Gunpowder", tag:"South Indian", blurb:"Garden seating under palms, Malabar prawn curry and appams. Book ahead on weekends.", km:"6.8 km" },
+    { name:"Bhatti Village", tag:"Local tavern", blurb:"No menu, no fuss. Whatever the kitchen cooked that morning, served with poi bread.", km:"9.1 km" }
+  ],
+  "Best sunsets":[
+    { name:"Chapora Fort", tag:"Viewpoint", blurb:"Twenty-minute climb, laterite walls, the whole Vagator coastline turning orange.", km:"3.4 km" },
+    { name:"Kalacha Beach", tag:"Quiet cove", blurb:"A sweetwater lagoon behind the sand. Walk over from Ozran before 6 PM.", km:"5.0 km" }
+  ],
+  "Markets":[
+    { name:"Anjuna Flea Market", tag:"Wednesdays", blurb:"Runs 9 AM to sunset. Carry cash, bargain by half, skip the middle aisles.", km:"7.5 km" },
+    { name:"Mapusa Friday Market", tag:"Fridays", blurb:"Where Goan kitchens shop — chorizo, bebinca, spice bundles, kokum.", km:"11.2 km" }
+  ],
+  "Things to do":[
+    { name:"Spice plantation tour", tag:"Half day", blurb:"Guided walk through vanilla, nutmeg and pepper vines, lunch on a banana leaf.", km:"22 km" },
+    { name:"Mandovi backwater kayak", tag:"Morning", blurb:"Mangrove channels with kingfishers. Reception can book your 7 AM slot.", km:"14 km" }
+  ]
+};
+
+
+/* Sample content — each hotel replaces these with its own real offers and
+   activities. Nothing here is a real price list. */
+var OFFERS = [
+  { title:"20% off on spa", text:"Any 60-minute treatment at Kadamba Spa. Once per stay.", valid:"Valid till 31 Oct" },
+  { title:"Sunset kayak for two", text:"Guided paddle through the mangroves with fresh coconut water.", valid:"Daily, 4:30 PM" },
+  { title:"Beach shack happy hour", text:"Buy one get one on mocktails and local beer, 5 to 7 PM.", valid:"Every evening" }
+];
+var ACTIVITIES = [
+  { title:"Morning beach yoga", tag:"Wellness", day:"Today",    time:"6:30 AM", place:"Beach deck",    blurb:"Gentle 45-minute flow with the sea in front of you." },
+  { title:"Kids pool games",    tag:"Kids",     day:"Today",    time:"11:00 AM", place:"Main pool",    blurb:"Treasure hunt and relay races, ages 4 to 10. Parents welcome." },
+  { title:"Cooking class: Goan fish curry", tag:"Culture", day:"Today", time:"4:00 PM", place:"Restaurant kitchen", blurb:"Cook with our chef, then eat what you make." },
+  { title:"Sandcastle contest", tag:"Kids",     day:"Tomorrow", time:"10:00 AM", place:"Beach",        blurb:"Prizes for the tallest and the most creative castle." },
+  { title:"Pool volleyball",    tag:"Pool",     day:"Tomorrow", time:"5:00 PM",  place:"Main pool",    blurb:"Friendly teams, towels provided." },
+  { title:"Spice garden walk",  tag:"Culture",  day:"Tomorrow", time:"9:00 AM",  place:"Hotel garden", blurb:"Walk through nutmeg, vanilla and pepper vines with our gardener." }
+];
+var ACT_TAGS = ["All","Kids","Pool","Wellness","Culture"];
+var STAFF_CATS = ["Housekeeping","Restaurant","Mini bar","Laundry","Spa","Taxi booking","Special occasion","Activity","Offer","Other"];
+var STATUS_LABEL = { "new":"New", "pending":"Pending", "accepted":"In progress", "done":"Solved", "rejected":"Rejected" };
+
+var SERVICES = Object.keys(CATALOG);
+
+var SERVICE_ICONS = {
+  "Housekeeping":"🧹", "Restaurant":"🍽️", "Mini bar":"🍷", "Laundry":"👕",
+  "Spa":"💆", "Taxi booking":"🚕", "Special occasion":"🎉"
+};
+var GUIDE_ICONS = {
+  "Where to eat":"🍴", "Best sunsets":"🌅", "Markets":"🛍️", "Things to do":"🧭"
+};
+
+/* ============================================================
+   STATE
+   ============================================================ */
+var tickets = [];
+var cart = {};            // { "Bath towel": 2 }
+var noteText = "";        // whatever the guest typed in the free-text box
+var currentCat = null;    // which CATALOG key the guest is currently ordering from
+var view = "guest";
+var screen = "home";
+var openGroup = null;
+var feedbackList = [];
+var deskTab = "overview";
+var reqFilter = "all";
+var showAddForm = false;
+var addFormVals = { room:"", cat:"Housekeeping", note:"" };
+var reasonFor = null;      // { id, status } while staff is typing a reason
+var reasonText = "";
+var actDay = "Today";
+var actTag = "All";
+var fbStars = 0;
+var fbComment = "";
+var fbSent = false;
+var fbUnsub = null;
+
+/* ============================================================
+   SYNC LAYER — Firebase Firestore
+   Fill in your own project's config below (see SETUP.md — five
+   minutes, free). Once filled in, every device that opens this page
+   — a guest's phone, reception's screen, anywhere in the world —
+   shares the same live data: check a guest in on one screen, and
+   any other open screen updates within a second or two, on its own.
+   Left blank, or if Firebase can't be reached, the app falls back to
+   saving on that device only — so it always works, even before
+   you've set anything up.
+   ============================================================ */
+var firebaseConfig = {
+  apiKey: "AIzaSyBxSZ_Qri9Ud4Ja2eto729AcYsJ6EMN09k",
+  authDomain: "nivas-concierge.firebaseapp.com",
+  projectId: "nivas-concierge",
+  storageBucket: "nivas-concierge.firebasestorage.app",
+  messagingSenderId: "2315251904",
+  appId: "1:2315251904:web:b7a9c10615bcee872efd25"
+};
+
+var db = null;
+var dbReady = false;
+
+function localSave(){ try{ localStorage.setItem("kadamba_feedback", JSON.stringify(feedbackList)); localStorage.setItem("kadamba_tickets", JSON.stringify(tickets)); localStorage.setItem("kadamba_rooms", JSON.stringify(ROOMS)); }catch(e){} }
+function localLoad(){
+  try{
+    var t = localStorage.getItem("kadamba_tickets");
+    if(t) tickets = JSON.parse(t) || [];
+    var f = localStorage.getItem("kadamba_feedback");
+    if(f) feedbackList = JSON.parse(f) || [];
+    var r = localStorage.getItem("kadamba_rooms");
+    if(r) ROOMS = JSON.parse(r) || ROOMS;
+  }catch(e){}
+}
+
+function refreshAll(){
+  renderRooms();
+  renderDesk();
+  renderGuest();
+}
+
+function startFeedbackListener(){
+  // Feedback can only be READ by signed-in staff (see Firestore rules), so
+  // this only starts once reception is logged in.
+  if(!dbReady || fbUnsub) return;
+  fbUnsub = db.collection("feedback").orderBy("createdAt","desc").limit(200).onSnapshot(function(snap){
+    feedbackList = snap.docs.map(function(d){ var x = d.data() || {}; x.id = d.id; return x; });
+    renderDesk();
+  }, function(){});
+}
+
+function showDeskContent(showSignOut){
+  var gate = document.getElementById("deskLogin");
+  var content = document.getElementById("deskContent");
+  var signOutBtn = document.getElementById("signOutBtn");
+  if(gate) gate.classList.add("gate-hidden");
+  if(content) content.classList.remove("gate-hidden");
+  if(signOutBtn) signOutBtn.style.display = showSignOut ? "inline-block" : "none";
+}
+
+function showLoginGate(){
+  var gate = document.getElementById("deskLogin");
+  var content = document.getElementById("deskContent");
+  var signOutBtn = document.getElementById("signOutBtn");
+  if(gate) gate.classList.remove("gate-hidden");
+  if(content) content.classList.add("gate-hidden");
+  if(signOutBtn) signOutBtn.style.display = "none";
+}
+
+async function seedRoomsIfNeeded(){
+  // Only reached once someone is actually signed in (or Auth isn't set up
+  // at all), so this is never attempted from an anonymous guest's device.
+  // Checks each default room individually — so if Room 101 already has a
+  // real guest checked in, Rooms 204 and 310 still get created rather
+  // than being silently skipped forever.
+  try{
+    for(var i=0;i<ROOMS.length;i++){
+      var ref = db.collection("rooms").doc(ROOMS[i].room);
+      var doc = await ref.get();
+      if(!doc.exists){
+        await ref.set({ guest: null, checkedInAt: null });
+      }
+    }
+  }catch(e){ /* another signed-in device may already be seeding — safe to ignore */ }
+}
+
+async function initSync(){
+  var configFilledIn = firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf("PASTE_") !== 0;
+
+  if(!configFilledIn || typeof firebase === "undefined"){
+    // Firebase not set up yet (or the script failed to load) — behave
+    // exactly as a solo, per-device demo until you complete SETUP.md.
+    // No backend means nothing to protect yet, so skip the login gate.
+    localLoad();
+    refreshAll();
+    showDeskContent();
+    return;
+  }
+
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  }catch(e){
+    db = null;
+    localLoad();
+    refreshAll();
+    showDeskContent();
+    return;
+  }
+
+  dbReady = true;
+
+  var authObj = null;
+  try{ authObj = firebase.auth(); }catch(e){ authObj = null; }
+
+  if(authObj){
+    authObj.onAuthStateChanged(function(user){
+      if(user){
+        showDeskContent(true);
+        seedRoomsIfNeeded();
+        startFeedbackListener();
+      } else {
+        if(fbUnsub){ fbUnsub(); fbUnsub = null; feedbackList = []; }
+        showLoginGate();
+      }
+    });
+  } else {
+    // Auth SDK didn't load — don't lock reception out entirely, since
+    // there's nothing wrong with the data layer itself
+    showDeskContent();
+    seedRoomsIfNeeded();
+    startFeedbackListener();
+  }
+
+  // live reads — open to everyone, guests and reception alike, so a
+  // guest can see their own request update without needing to sign in
+  db.collection("rooms").onSnapshot(function(snap){
+    var rows = snap.docs.map(function(d){
+      var data = d.data() || {};
+      return { room: d.id, guest: data.guest || null, checkedInAt: data.checkedInAt || null };
+    });
+    rows.sort(function(a,b){ return a.room.localeCompare(b.room); });
+    if(rows.length) ROOMS = rows;
+    renderRooms();
+    renderGuest();
+  }, function(){ /* falls back to whatever was last rendered */ });
+
+  db.collection("tickets").orderBy("createdAt","desc").limit(200).onSnapshot(function(snap){
+    tickets = snap.docs.map(function(d){
+      var data = d.data() || {};
+      data.id = d.id;
+      return data;
+    });
+    renderDesk();
+    renderGuest();
+  }, function(){});
+}
+
+function clock(){
+  var d = new Date();
+  var h = d.getHours(), m = d.getMinutes();
+  var ap = h >= 12 ? "PM" : "AM";
+  h = h % 12; if(h === 0) h = 12;
+  return h + ":" + (m < 10 ? "0" + m : m) + " " + ap;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+}); }
+
+/* ============================================================
+   GUEST SCREENS
+   ============================================================ */
+function renderGuest(){
+  var feed = document.getElementById("feed");
+  var html = "";
+  renderHeader();
+
+  var guestRoom = currentGuestRoom();
+
+  if(!guestRoom.guest){
+    feed.innerHTML = bubble("This room isn't checked in yet. Once reception checks a guest in, this screen will greet them by name.");
+    renderTiles();
+    return;
+  }
+
+  if(screen === "home"){
+    html += bubble("Welcome, <b>" + esc(guestRoom.guest) + "</b>. I'm your concierge for the whole stay — housekeeping, a table, a taxi, or a tip on where the good food is. Just pick one.");
+    if(OFFERS.length){
+      html += '<div class="offer-banner"><small>SPECIAL OFFER FOR YOU</small><h4>' + esc(OFFERS[0].title) + '</h4><p>' + esc(OFFERS[0].text) + '</p>' +
+        '<button data-screen="offers">See all offers</button></div>';
+    }
+    html += '<div class="chips">' + SERVICES.map(function(s){
+      return '<button class="chip" data-svc="' + esc(s) + '"><span class="chip-icon">' + SERVICE_ICONS[s] + '</span>' + esc(s) + '</button>';
+    }).join("") + '</div>';
+    html += bubble("Stepping out today? I've pulled together the places our guests keep coming back for.");
+    html += '<div class="chips">' + Object.keys(GUIDE).map(function(g){
+      return '<button class="chip" data-guide="' + esc(g) + '"><span class="chip-icon">' + GUIDE_ICONS[g] + '</span>' + esc(g) + '</button>';
+    }).join("") + '</div>';
+    html += myTickets();
+  }
+
+  if(screen === "house"){
+    html += back();
+    html += '<div class="panel"><h3>House & Wi-Fi</h3>' + HOUSE_INFO.map(function(r){
+      return '<div class="kv"><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>';
+    }).join("") + '</div>';
+  }
+
+  if(screen === "services"){
+    html += back();
+    html += bubble("Absolutely, " + esc(guestRoom.guest) + "! What can I take care of for you? Go ahead and pick one:");
+    html += '<div class="chips">' + SERVICES.map(function(s){
+      return '<button class="chip" data-svc="' + esc(s) + '"><span class="chip-icon">' + SERVICE_ICONS[s] + '</span>' + esc(s) + '</button>';
+    }).join("") + '</div>';
+  }
+
+  if(screen.indexOf("cat:") === 0){
+    var catName = screen.slice(4);
+    var cat = CATALOG[catName];
+    html += back();
+    if(cat){
+      var g = currentGuestRoom();
+      var introText = typeof cat.intro === "function" ? cat.intro(g) : cat.intro;
+      html += bubble(introText);
+
+      if(cat.type === "items"){
+        html += cat.groups.map(function(g, gi){
+          var picked = g.items.reduce(function(n, it){ return n + (cart[it.name] || 0); }, 0);
+          var rows = g.items.map(function(it){
+            var q = cart[it.name] || 0;
+            return '<div class="row"><div class="row-label"><span class="row-icon">' + it.icon + '</span><span>' + esc(it.name) + '</span></div><div class="step">' +
+              '<button data-minus="' + esc(it.name) + '"' + (q ? "" : " disabled") + ' aria-label="one less ' + esc(it.name) + '">−</button>' +
+              '<output>' + q + '</output>' +
+              '<button data-plus="' + esc(it.name) + '" aria-label="one more ' + esc(it.name) + '">+</button></div></div>';
+          }).join("");
+          return '<div class="acc' + (openGroup === gi ? " open" : "") + '">' +
+            '<button class="acc-head" data-group="' + gi + '">' + esc(g.group) +
+            '<span class="count">' + (picked ? picked + " selected" : "") + '</span></button>' +
+            '<div class="acc-body">' + rows + '</div></div>';
+        }).join("");
+        html += '<textarea id="note" placeholder="Anything else? Type it here…">' + esc(noteText) + '</textarea>';
+        var total = Object.keys(cart).reduce(function(n, k){ return n + cart[k]; }, 0);
+        html += '<button class="send" id="sendItems"' + (total ? "" : " disabled") + '>' +
+                (total ? "Send request (" + total + " item" + (total > 1 ? "s" : "") + ")" : "Pick what you need") + '</button>';
+      } else {
+        html += '<div class="chips">' + cat.chips.map(function(c){
+          return '<button class="chip" data-chip="' + esc(c) + '">' + esc(c) + '</button>';
+        }).join("") + '</div>';
+        html += '<textarea id="note" placeholder="' + esc(cat.placeholder) + '">' + esc(noteText) + '</textarea>';
+        html += '<button class="send" id="sendForm"' + (noteText.trim() ? "" : " disabled") + '>Send request</button>';
+      }
+    }
+    html += myTickets();
+  }
+
+  if(screen.indexOf("guide:") === 0){
+    var key = screen.slice(6);
+    html += back();
+    html += bubble("Here's what I'd send you to for <b>" + esc(key.toLowerCase()) + "</b>.");
+    html += GUIDE[key].map(function(p){
+      var mapUrl = "https://www.google.com/maps/search/" + encodeURIComponent(p.name + " Goa");
+      return '<div class="place"><div class="place-top"><h4>' + esc(p.name) + '</h4>' +
+        '<span class="tag">' + esc(p.tag) + '</span></div><p>' + esc(p.blurb) + '</p>' +
+        '<div class="place-actions"><a class="pill-dark" href="' + mapUrl + '" target="_blank" rel="noopener">Directions</a>' +
+        '<span class="pill-ghost">' + esc(p.km) + ' away</span></div></div>';
+    }).join("");
+  }
+
+
+  if(screen === "offers"){
+    html += back();
+    html += bubble("Offers just for you, " + esc(guestRoom.guest) + ". Tap <b>Claim</b> and reception will confirm it with you.");
+    html += OFFERS.map(function(o, i){
+      var done = alreadyAsked("Offer", o.title);
+      return '<div class="card-sm"><h4>' + esc(o.title) + '</h4><p>' + esc(o.text) + '</p><div class="meta"><span>' + esc(o.valid) + '</span>' +
+        '<button class="btn-claim" data-claim="' + i + '"' + (done ? " disabled" : "") + '>' + (done ? "Requested" : "Claim") + '</button></div></div>';
+    }).join("");
+    html += myTickets();
+  }
+
+  if(screen === "activities"){
+    html += back();
+    html += bubble("What's on at the resort. Pick a day, then reserve a spot.");
+    html += '<div class="chips">' + ["Today","Tomorrow"].map(function(d){
+      return '<button class="chip' + (actDay === d ? " on" : "") + '" data-day="' + d + '">' + d + '</button>';
+    }).join("") + '</div>';
+    html += '<div class="chips">' + ACT_TAGS.map(function(g){
+      return '<button class="chip' + (actTag === g ? " on" : "") + '" data-acttag="' + g + '">' + g + '</button>';
+    }).join("") + '</div>';
+    var list = ACTIVITIES.filter(function(a){ return a.day === actDay && (actTag === "All" || a.tag === actTag); });
+    if(!list.length) html += bubble("Nothing in this filter for " + actDay.toLowerCase() + ". Try another tag.");
+    html += list.map(function(a){
+      var key = a.title + " · " + a.day + " " + a.time;
+      var done = alreadyAsked("Activity", key);
+      return '<div class="card-sm"><h4>' + esc(a.title) + '</h4><p>' + esc(a.blurb) + '</p><div class="meta"><span>' + esc(a.time) + ' · ' + esc(a.place) + ' · ' + esc(a.tag) + '</span>' +
+        '<button class="btn-claim" data-reserve="' + ACTIVITIES.indexOf(a) + '"' + (done ? " disabled" : "") + '>' + (done ? "Requested" : "Reserve") + '</button></div></div>';
+    }).join("");
+    html += myTickets();
+  }
+
+  if(screen === "feedback"){
+    html += back();
+    if(fbSent){
+      html += bubble("Thank you, " + esc(guestRoom.guest) + ". Your feedback has gone to the hotel team.");
+    } else {
+      html += bubble("How is your stay so far? Tap the stars.");
+      html += '<div class="stars">' + [1,2,3,4,5].map(function(n){
+        return '<button data-star="' + n + '" class="' + (fbStars >= n ? "on" : "") + '" aria-label="' + n + ' star' + (n>1?"s":"") + '">★</button>';
+      }).join("") + '</div>';
+      html += '<textarea id="fbText" placeholder="Anything we can do better? (optional)">' + esc(fbComment) + '</textarea>';
+      html += '<button class="send" id="sendFeedback"' + (fbStars ? "" : " disabled") + '>' + (fbStars ? "Send feedback" : "Choose a rating") + '</button>';
+    }
+  }
+
+  if(screen === "contacts"){
+    html += back();
+    html += '<div class="panel"><h3>Reach us</h3>' +
+      '<div class="kv"><span>Reception</span><span>Dial 9</span></div>' +
+      '<div class="kv"><span>Housekeeping</span><span>Dial 4</span></div>' +
+      '<div class="kv"><span>Restaurant</span><span>Dial 6</span></div>' +
+      '<div class="kv"><span>WhatsApp</span><span>+91 98000 00000</span></div>' +
+      '<div class="kv"><span>Doctor on call</span><span>24 hours</span></div></div>';
+  }
+
+  feed.innerHTML = html;
+  renderTiles();
+}
+
+function alreadyAsked(type, key){
+  var g = currentGuestRoom();
+  return tickets.some(function(t){
+    return t.type === type && t.room === g.room && t.guest === g.guest && t.status !== "rejected" && String(t.note || "").indexOf(key) === 0;
+  });
+}
+
+function bubble(t){ return '<div class="msg">' + t + '</div>'; }
+function back(){ return '<button class="back" data-back="1">‹ Back to concierge</button>'; }
+
+function myTickets(){
+  var g = currentGuestRoom();
+  var mine = tickets.filter(function(t){ return t.room === g.room && t.guest === g.guest; }).slice(0, 4);
+  if(!mine.length) return "";
+  return mine.map(function(t){
+    var line = (t.items && t.items.length)
+      ? t.items.map(function(i){ return i.name + " × " + i.qty; }).join(", ")
+      : t.note;
+    var state = t.status === "new" ? "Sent " + t.at
+              : t.status === "accepted" ? "Accepted " + t.acceptedAt + " — on the way"
+              : t.status === "pending" ? "On hold" + (t.reason ? " — " + t.reason : "")
+              : t.status === "rejected" ? "Sorry, not possible" + (t.reason ? " — " + t.reason : "")
+              : "Completed " + t.doneAt;
+    return '<div class="msg me"><b>' + esc(t.type) + '</b><br>' + esc(line) +
+           '<br><span style="opacity:.7;font-size:11.5px">' + esc(state) + '</span></div>';
+  }).join("");
+}
+
+function renderHeader(){
+  var g = currentGuestRoom();
+  document.getElementById("whoami").innerHTML = g.guest
+    ? '<b>' + esc(g.guest) + '</b>Room ' + esc(g.room) + ' · Log out'
+    : '<b>Room ' + esc(g.room) + '</b>Not checked in';
+  var demoRow = document.getElementById("demoPickerRow");
+  if(demoRow) demoRow.style.display = ROOM_FROM_URL ? "none" : "flex";
+  var picker = document.getElementById("roomPicker");
+  picker.innerHTML = ROOMS.map(function(r){
+    return '<option value="' + esc(r.room) + '"' + (r.room === ACTIVE_ROOM ? " selected" : "") + '>Room ' + esc(r.room) + '</option>';
+  }).join("");
+}
+
+function renderRooms(){
+  var body = document.getElementById("roomsBody");
+  if(!body) return;
+  body.innerHTML = ROOMS.map(function(r){
+    var status = r.guest
+      ? '<b>' + esc(r.guest) + '</b><span>Checked in ' + esc(r.checkedInAt) + '</span>'
+      : '<span class="room-empty-tag">Vacant</span>';
+    var action = r.guest
+      ? '<button class="btn-checkout" data-checkout="' + esc(r.room) + '">Check out</button>'
+      : '<div class="room-form"><input type="text" id="name-' + esc(r.room) + '" placeholder="Guest name"><button class="btn-checkin" data-checkin="' + esc(r.room) + '">Check in</button></div>';
+    return '<div class="room-row"><span class="room-num">' + esc(r.room) + '</span>' +
+      '<div class="room-status">' + status + '</div>' + action + '</div>';
+  }).join("");
+}
+
+function renderTiles(){
+  var tiles = [
+    ["House & Wi-Fi","house","house"],
+    ["Guest services","services","services"],
+    ["Goa guide","guide:Where to eat","guide"],
+    ["Offers","offers","offers"],
+    ["Activities","activities","activities"],
+    ["Contacts","contacts","contacts"],
+    ["Feedback","feedback","feedback"]
+  ];
+  document.getElementById("tiles").innerHTML = tiles.map(function(t){
+    return '<button class="tile" data-tile="' + t[2] + '" data-screen="' + t[1] + '" aria-current="' + (screen === t[1]) + '">' + t[0] + '</button>';
+  }).join("");
+}
+
+/* ============================================================
+   DESK
+   ============================================================ */
+function catOf(t){ return String(t.type || "Other").replace(/ request$/,""); }
+function shortId(t){ return "#" + String(t.id).slice(-4).toUpperCase(); }
+function badge(st){ return '<span class="badge b-' + st + '">' + STATUS_LABEL[st] + '</span>'; }
+function countBy(st){ return tickets.filter(function(t){ return t.status === st; }).length; }
+
+function renderDesk(){
+  var body = document.getElementById("deskBody");
+  var tabsEl = document.getElementById("deskTabs");
+  if(!body || !tabsEl) return;
+  var tabs = [["overview","Overview"],["requests","Requests (" + (countBy("new") + countBy("pending") + countBy("accepted")) + " open)"],["rooms","Rooms"],["feedback","Feedback"]];
+  tabsEl.innerHTML = tabs.map(function(t){
+    return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (deskTab === t[0]) + '">' + t[1] + '</button>';
+  }).join("");
+  var ae = document.activeElement;
+  if(ae && body.contains(ae) && (ae.tagName === "INPUT" || ae.tagName === "SELECT")) return; // don't wipe what staff is typing
+  var roomsPanel = document.getElementById("roomsPanel");
+  if(roomsPanel) roomsPanel.style.display = deskTab === "rooms" ? "block" : "none";
+
+  var banner = dbReady ? "" : '<div class="localbanner">Demo mode: Firebase is not connected, so requests stay on this device only.</div>';
+  if(deskTab === "overview") body.innerHTML = banner + deskOverview();
+  else if(deskTab === "requests") body.innerHTML = banner + deskRequests();
+  else if(deskTab === "rooms") body.innerHTML = banner + deskRoomsSummary();
+  else body.innerHTML = banner + deskFeedback();
+}
+
+function deskOverview(){
+  var occ = ROOMS.filter(function(r){ return r.guest; }).length;
+  var h = '<div class="stat-grid">' +
+    '<div class="stat s-new"><b>' + countBy("new") + '</b><span>New requests</span></div>' +
+    '<div class="stat s-work"><b>' + countBy("accepted") + '</b><span>In progress</span></div>' +
+    '<div class="stat s-done"><b>' + countBy("done") + '</b><span>Completed</span></div>' +
+    '<div class="stat s-room"><b>' + occ + ' / ' + ROOMS.length + '</b><span>Rooms occupied</span></div></div>';
+
+  // donut: requests by category
+  var counts = {};
+  tickets.forEach(function(t){ var c = catOf(t); counts[c] = (counts[c] || 0) + 1; });
+  var cats = Object.keys(counts).sort(function(x,y){ return counts[y] - counts[x]; });
+  var palette = ["var(--moss)","var(--brass)","var(--teal)","var(--slate)","var(--alert)","#7C6A9C","#8A9A5B","#C07A9A"];
+  var donut = '<div class="empty" style="padding:20px 0">No requests yet</div>';
+  if(cats.length){
+    var acc = 0, stops = [];
+    cats.forEach(function(c, i){
+      var from = acc / tickets.length * 100; acc += counts[c];
+      stops.push(palette[i % palette.length] + " " + from + "% " + (acc / tickets.length * 100) + "%");
+    });
+    donut = '<div class="donut-row"><div class="donut" style="background:conic-gradient(' + stops.join(",") + ')" role="img" aria-label="Requests by category"></div><div class="legend">' +
+      cats.map(function(c, i){ return '<div><i style="background:' + palette[i % palette.length] + '"></i>' + esc(c) + ' — <b>' + counts[c] + '</b></div>'; }).join("") + '</div></div>';
+  }
+  var recent = tickets.slice(0, 5).map(function(t){
+    return '<div class="mini"><span><b>' + esc(t.room) + '</b> · ' + esc(catOf(t)) + '<br><span style="color:var(--ink-soft)">' + esc(t.guest) + ' · ' + esc(t.at) + '</span></span>' + badge(t.status) + '</div>';
+  }).join("") || '<div class="empty" style="padding:20px 0">Nothing yet</div>';
+  h += '<div class="two-col" style="margin-top:14px"><div class="block"><h3>Requests by category</h3>' + donut + '</div>' +
+       '<div class="block"><h3>Recent requests</h3>' + recent + '</div></div>';
+  if(countBy("pending") || countBy("rejected")){
+    h += '<p class="note" style="margin-top:10px">Also: ' + countBy("pending") + ' pending, ' + countBy("rejected") + ' rejected.</p>';
+  }
+  return h;
+}
+
+function deskRequests(){
+  var filters = [["all","All"],["new","New"],["pending","Pending"],["accepted","In progress"],["done","Solved"],["rejected","Rejected"]];
+  var h = '<div class="filters">' + filters.map(function(f){
+    var n = f[0] === "all" ? tickets.length : countBy(f[0]);
+    return '<button class="chip' + (reqFilter === f[0] ? " on" : "") + '" data-filter="' + f[0] + '">' + f[1] + ' ' + n + '</button>';
+  }).join("") + '<span class="grow"></span><button class="btn-claim" data-act="addtoggle">' + (showAddForm ? "Close form" : "+ Add request") + '</button></div>';
+
+  if(showAddForm){
+    var occupied = ROOMS.filter(function(r){ return r.guest; });
+    var roomOpts = ROOMS.map(function(r){
+      return '<option value="' + esc(r.room) + '"' + (addFormVals.room === r.room ? " selected" : "") + '>Room ' + esc(r.room) + (r.guest ? " — " + esc(r.guest) : " (vacant)") + '</option>';
+    }).join("");
+    h += '<div class="addform"><label for="addRoom">Room</label><select id="addRoom"><option value="">Choose a room…</option>' + roomOpts + '</select>' +
+      '<label for="addCat">Category</label><select id="addCat">' + STAFF_CATS.map(function(c){ return '<option' + (addFormVals.cat === c ? " selected" : "") + '>' + c + '</option>'; }).join("") + '</select>' +
+      '<label for="addNote">Details (what the guest asked for)</label><input id="addNote" value="' + esc(addFormVals.note) + '" placeholder="e.g. Table for 4 at 8 PM, by the pool">' +
+      '<button class="send" data-act="addsubmit" style="margin-top:2px">Log request</button>' +
+      '<p class="note">Use this for requests that come in by phone or at the desk. ' + occupied.length + ' room(s) have a guest checked in.</p></div>';
+  }
+
+  var list = tickets.filter(function(t){ return reqFilter === "all" || t.status === reqFilter; });
+  if(!list.length){
+    return h + '<div class="empty"><b>Nothing here</b>No requests match this filter.</div>';
+  }
+  h += '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>ID</th><th>Room / Guest</th><th>Category</th><th>Details</th><th>Time</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+  list.forEach(function(t){
+    var details = (t.items && t.items.length ? t.items.map(function(i){ return esc(i.name) + " × " + i.qty; }).join(", ") : "") +
+      (t.note ? (t.items && t.items.length ? "<br>" : "") + "“" + esc(t.note) + "”" : "") +
+      (t.reason ? '<br><i style="color:var(--ink-soft)">Reason: ' + esc(t.reason) + '</i>' : "");
+    var acts = "";
+    var id = esc(t.id);
+    if(t.status === "new") acts = '<button class="btn-sm btn-accept" data-accept="' + id + '">Accept</button><button class="btn-sm btn-hold" data-hold="' + id + '">Pending</button><button class="btn-sm btn-rej" data-reject="' + id + '">Reject</button>';
+    else if(t.status === "pending") acts = '<button class="btn-sm btn-accept" data-accept="' + id + '">Accept</button><button class="btn-sm btn-rej" data-reject="' + id + '">Reject</button>';
+    else if(t.status === "accepted") acts = '<button class="btn-sm btn-done" data-done="' + id + '">Mark completed</button><button class="btn-sm btn-rej" data-reject="' + id + '">Reject</button>';
+    else acts = '<span style="color:var(--ink-soft)">—</span>';
+    h += '<tr><td>' + esc(shortId(t)) + '</td><td><b>' + esc(t.room) + '</b><br>' + esc(t.guest) + '</td><td>' + esc(catOf(t)) + (t.source === "staff" ? '<br><span style="color:var(--ink-soft)">logged by staff</span>' : "") + '</td><td>' + details + '</td><td>' + esc(t.at) + '</td><td>' + badge(t.status) + '</td><td><div class="acts">' + acts + '</div></td></tr>';
+    if(reasonFor && String(reasonFor.id) === String(t.id)){
+      h += '<tr class="reason-row"><td colspan="7"><b>' + (reasonFor.status === "rejected" ? "Reject" : "Put on hold") + ' — reason the guest will see:</b> <input id="reasonInput" value="' + esc(reasonText) + '" placeholder="e.g. Spa is full today, can offer 10 AM tomorrow"> <button class="btn-sm btn-rej" data-act="confirmreason">Confirm</button> <button class="btn-plain" data-act="cancelreason">Cancel</button></td></tr>';
+    }
+  });
+  return h + '</tbody></table></div>';
+}
+
+function deskRoomsSummary(){
+  var occ = ROOMS.filter(function(r){ return r.guest; }).length;
+  return '<div class="stat-grid"><div class="stat s-room"><b>' + occ + '</b><span>Occupied</span></div>' +
+    '<div class="stat s-room"><b>' + (ROOMS.length - occ) + '</b><span>Vacant</span></div>' +
+    '<div class="stat s-room"><b>' + ROOMS.length + '</b><span>Total rooms</span></div></div>' +
+    '<p class="note">Check guests in and out below. The guest QR in each room shows this guest&rsquo;s name.</p>';
+}
+
+function deskFeedback(){
+  if(!feedbackList.length){
+    return '<div class="empty"><b>No feedback yet</b>Ratings from guests will appear here.</div>';
+  }
+  var sum = feedbackList.reduce(function(n, f){ return n + Number(f.stars || 0); }, 0);
+  var avg = (sum / feedbackList.length).toFixed(1);
+  var h = '<div class="two-col"><div class="block"><h3>Average rating</h3><div class="stat" style="border-top-color:var(--brass)"><b>' + avg + ' ★</b><span>from ' + feedbackList.length + ' guest' + (feedbackList.length > 1 ? "s" : "") + '</span></div></div><div class="block"><h3>Spread</h3>' +
+    [5,4,3,2,1].map(function(n){
+      var c = feedbackList.filter(function(f){ return Number(f.stars) === n; }).length;
+      return '<div class="fb-row"><span style="width:26px">' + n + ' ★</span><div class="bar"><i style="width:' + (c / feedbackList.length * 100) + '%"></i></div><span>' + c + '</span></div>';
+    }).join("") + '</div></div><div class="block" style="margin-top:14px"><h3>Comments</h3>';
+  h += feedbackList.map(function(f){
+    return '<div class="mini"><span><b>' + "★".repeat(Number(f.stars) || 0) + '</b> · Room ' + esc(f.room) + ' · ' + esc(f.guest) + '<br>' + (f.comment ? esc(f.comment) : '<span style="color:var(--ink-soft)">No comment</span>') + '</span></div>';
+  }).join("");
+  return h + '</div>';
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+function sendItemsRequest(){
+  var items = Object.keys(cart).filter(function(k){ return cart[k] > 0; })
+                .map(function(k){ return { name:k, qty:cart[k] }; });
+  if(!items.length) return;
+  pushTicket(items, noteText.trim());
+}
+
+function sendFormRequest(){
+  var text = noteText.trim();
+  if(!text) return;
+  pushTicket([], text);
+}
+
+async function pushTicket(items, note, typeLabel){
+  var g = currentGuestRoom();
+  var body = {
+    type: typeLabel || (currentCat + " request"),
+    source: "guest",
+    guest: g.guest,
+    room: g.room,
+    items: items,
+    note: note,
+    status: "new",
+    at: clock(),
+    acceptedAt: "",
+    doneAt: "",
+    createdAt: Date.now()
+  };
+
+  cart = {};
+  noteText = "";
+  openGroup = null;
+  currentCat = null;
+  if(!typeLabel) screen = "home";
+
+  if(dbReady){
+    try{
+      await db.collection("tickets").add(body);
+      // onSnapshot delivers the confirmed ticket to every open device, this one included
+    }catch(e){
+      toast("Couldn't reach the shared board — saved on this device only");
+      body.id = Date.now();
+      tickets.unshift(body);
+      localSave();
+      renderDesk();
+    }
+  } else {
+    body.id = Date.now();
+    tickets.unshift(body);
+    localSave();
+    renderDesk();
+  }
+  renderGuest();
+  toast("Request sent to reception");
+}
+
+async function setStatus(id, status, reason){
+  var patch = { status: status };
+  if(status === "accepted") patch.acceptedAt = clock();
+  if(status === "done") patch.doneAt = clock();
+  if(status === "rejected" || status === "pending") patch.reason = reason || "";
+  if(status === "accepted") patch.reason = "";
+
+  if(dbReady){
+    try{
+      await db.collection("tickets").doc(String(id)).update(patch);
+    }catch(e){
+      toast("Couldn't reach the shared board — try again");
+      return;
+    }
+  } else {
+    tickets.forEach(function(t){
+      if(String(t.id) !== String(id)) return;
+      Object.keys(patch).forEach(function(k){ t[k] = patch[k]; });
+    });
+    localSave();
+    renderDesk();
+    renderGuest();
+  }
+  toast(status === "accepted" ? "Accepted — guest notified" : status === "done" ? "Marked as completed" : status === "pending" ? "Put on hold — guest notified" : "Rejected — guest notified");
+}
+
+/* Guest taps Claim on an offer / Reserve on an activity — both become
+   ordinary requests so reception handles them in the same list. */
+function claimOffer(i){
+  var o = OFFERS[i]; if(!o) return;
+  pushTicket([], o.title + " (" + o.valid + ")", "Offer");
+}
+function reserveActivity(i){
+  var a = ACTIVITIES[i]; if(!a) return;
+  pushTicket([], a.title + " · " + a.day + " " + a.time + " · " + a.place, "Activity");
+}
+
+async function submitFeedback(){
+  var g = currentGuestRoom();
+  if(!fbStars) return;
+  var body = { room: g.room, guest: g.guest, stars: fbStars, comment: fbComment.trim(), createdAt: Date.now() };
+  var saved = false;
+  if(dbReady){
+    try{ await db.collection("feedback").add(body); saved = true; }
+    catch(e){ toast("Couldn't reach the hotel — please try again"); return; }
+  } else {
+    feedbackList.unshift(body); localSave(); saved = true;
+  }
+  if(saved){ fbSent = true; fbStars = 0; fbComment = ""; renderGuest(); renderDesk(); toast("Thank you for your feedback"); }
+}
+
+/* Staff logs a phone-in / desk request for a room */
+async function addStaffRequest(){
+  if(!addFormVals.room){ toast("Choose a room first"); return; }
+  if(!addFormVals.note.trim()){ toast("Add the details"); return; }
+  var r = ROOMS.find(function(x){ return x.room === addFormVals.room; });
+  var body = {
+    type: addFormVals.cat === "Other" ? "Other" : addFormVals.cat + " request",
+    source: "staff",
+    guest: (r && r.guest) || "Walk-in",
+    room: addFormVals.room,
+    items: [], note: addFormVals.note.trim(),
+    status: "new", at: clock(), acceptedAt: "", doneAt: "", createdAt: Date.now()
+  };
+  if(dbReady){
+    try{ await db.collection("tickets").add(body); }
+    catch(e){ toast("Couldn't reach the shared board — try again"); return; }
+  } else {
+    body.id = Date.now(); tickets.unshift(body); localSave();
+  }
+  addFormVals = { room:"", cat:"Housekeeping", note:"" };
+  showAddForm = false;
+  renderDesk();
+  toast("Request logged");
+}
+
+async function checkIn(roomNum){
+  var input = document.getElementById("name-" + roomNum);
+  var name = input ? input.value.trim() : "";
+  if(!name) return;
+  var at = clock();
+
+  if(dbReady){
+    try{
+      await db.collection("rooms").doc(roomNum).set({ guest:name, checkedInAt:at });
+      toast(name + " checked in to room " + roomNum);
+      return;
+    }catch(e){
+      toast("Couldn't reach the shared board — saved on this device only");
+    }
+  }
+  ROOMS.forEach(function(r){
+    if(r.room !== roomNum) return;
+    r.guest = name;
+    r.checkedInAt = at;
+  });
+  localSave();
+  renderRooms();
+  renderGuest();
+  toast(name + " checked in to room " + roomNum);
+}
+
+async function checkOut(roomNum){
+  if(dbReady){
+    try{
+      await db.collection("rooms").doc(roomNum).set({ guest:null, checkedInAt:null });
+      toast("Room " + roomNum + " checked out");
+      return;
+    }catch(e){
+      toast("Couldn't reach the shared board — saved on this device only");
+    }
+  }
+  ROOMS.forEach(function(r){
+    if(r.room !== roomNum) return;
+    r.guest = null;
+    r.checkedInAt = null;
+  });
+  localSave();
+  renderRooms();
+  renderGuest();
+  toast("Room " + roomNum + " checked out");
+}
+
+var toastTimer;
+function jumpToTop(){
+  var el = document.getElementById("phoneWrap");
+  if(el) el.scrollIntoView({ block:"start" });
+}
+function toast(msg){
+  var old = document.querySelector(".toast");
+  if(old) old.remove();
+  var el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.remove(); }, 2200);
+}
+
+/* ============================================================
+   EVENTS — one listener for the whole page
+   ============================================================ */
+document.addEventListener("click", function(e){
+  var t = e.target.closest("button");
+  if(!t) return;
+
+  if(t.dataset.screen){ screen = t.dataset.screen; openGroup = null; renderGuest(); jumpToTop(); return; }
+  if(t.dataset.back){ screen = "home"; renderGuest(); jumpToTop(); return; }
+  if(t.dataset.guide){ screen = "guide:" + t.dataset.guide; renderGuest(); jumpToTop(); return; }
+
+  if(t.dataset.svc){
+    if(CATALOG[t.dataset.svc]){
+      currentCat = t.dataset.svc;
+      cart = {};
+      noteText = "";
+      openGroup = null;
+      screen = "cat:" + t.dataset.svc;
+      renderGuest();
+      jumpToTop();
+    }
+    return;
+  }
+  if(t.dataset.chip){
+    var pieces = noteText.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+    if(pieces.indexOf(t.dataset.chip) === -1) pieces.push(t.dataset.chip);
+    noteText = pieces.join(", ");
+    renderGuest();
+    return;
+  }
+  if(t.dataset.group !== undefined){
+    var gi = Number(t.dataset.group);
+    openGroup = (openGroup === gi) ? null : gi;
+    renderGuest();
+    return;
+  }
+  if(t.dataset.plus){ cart[t.dataset.plus] = (cart[t.dataset.plus] || 0) + 1; renderGuest(); return; }
+  if(t.dataset.minus){
+    var k = t.dataset.minus;
+    cart[k] = Math.max(0, (cart[k] || 0) - 1);
+    if(!cart[k]) delete cart[k];
+    renderGuest();
+    return;
+  }
+  if(t.id === "sendItems"){ sendItemsRequest(); return; }
+  if(t.id === "sendForm"){ sendFormRequest(); return; }
+  if(t.dataset.claim){ claimOffer(Number(t.dataset.claim)); return; }
+  if(t.dataset.reserve){ reserveActivity(Number(t.dataset.reserve)); return; }
+  if(t.dataset.day){ actDay = t.dataset.day; renderGuest(); return; }
+  if(t.dataset.acttag){ actTag = t.dataset.acttag; renderGuest(); return; }
+  if(t.dataset.star){ fbStars = Number(t.dataset.star); renderGuest(); return; }
+  if(t.id === "sendFeedback"){ submitFeedback(); return; }
+  if(t.dataset.tab){ deskTab = t.dataset.tab; renderDesk(); return; }
+  if(t.dataset.filter){ reqFilter = t.dataset.filter; renderDesk(); return; }
+  if(t.dataset.act === "addtoggle"){ showAddForm = !showAddForm; renderDesk(); return; }
+  if(t.dataset.act === "addsubmit"){ addStaffRequest(); return; }
+  if(t.dataset.reject){ reasonFor = { id:t.dataset.reject, status:"rejected" }; reasonText = ""; renderDesk(); return; }
+  if(t.dataset.hold){ reasonFor = { id:t.dataset.hold, status:"pending" }; reasonText = ""; renderDesk(); return; }
+  if(t.dataset.act === "cancelreason"){ reasonFor = null; renderDesk(); return; }
+  if(t.dataset.act === "confirmreason"){
+    if(!reasonFor) return;
+    var rf = reasonFor; var rt = reasonText.trim();
+    if(!rt){ toast("Add a short reason for the guest"); return; }
+    reasonFor = null; reasonText = "";
+    setStatus(rf.id, rf.status, rt);
+    return;
+  }
+  if(t.dataset.accept){ setStatus(t.dataset.accept, "accepted"); return; }
+  if(t.dataset.done){ setStatus(t.dataset.done, "done"); return; }
+  if(t.dataset.checkin){ checkIn(t.dataset.checkin); return; }
+  if(t.dataset.checkout){ checkOut(t.dataset.checkout); return; }
+  if(t.id === "loginSubmit"){ attemptSignIn(); return; }
+  if(t.id === "signOutBtn"){ if(typeof firebase !== "undefined" && firebase.auth) firebase.auth().signOut(); return; }
+
+  if(t.id === "btnGuest" || t.id === "btnDesk"){
+    view = (t.id === "btnGuest") ? "guest" : "desk";
+    document.getElementById("btnGuest").setAttribute("aria-pressed", view === "guest");
+    document.getElementById("btnDesk").setAttribute("aria-pressed", view === "desk");
+    document.getElementById("phoneWrap").classList.toggle("is-hidden", view !== "guest");
+    document.getElementById("deskWrap").classList.toggle("is-hidden", view !== "desk");
+  }
+});
+
+/* keep the typed note while re-rendering the housekeeping screen */
+document.addEventListener("input", function(e){
+  if(e.target.id === "note") noteText = e.target.value;
+  if(e.target.id === "fbText") fbComment = e.target.value;
+  if(e.target.id === "reasonInput") reasonText = e.target.value;
+  if(e.target.id === "addNote") addFormVals.note = e.target.value;
+});
+
+document.addEventListener("change", function(e){
+  if(e.target.id === "addRoom") addFormVals.room = e.target.value;
+  if(e.target.id === "addCat") addFormVals.cat = e.target.value;
+  if(e.target.id === "roomPicker"){
+    ACTIVE_ROOM = e.target.value;
+    fbSent = false; fbStars = 0; fbComment = "";
+    screen = "home";
+    renderGuest();
+  }
+});
+
+document.addEventListener("keydown", function(e){
+  if(e.key === "Enter" && e.target.id && e.target.id.indexOf("name-") === 0){
+    checkIn(e.target.id.slice(5));
+  }
+  if(e.key === "Enter" && (e.target.id === "loginEmail" || e.target.id === "loginPass")){
+    attemptSignIn();
+  }
+});
+
+function attemptSignIn(){
+  var email = document.getElementById("loginEmail").value.trim();
+  var pass = document.getElementById("loginPass").value;
+  var errEl = document.getElementById("loginError");
+  errEl.style.display = "none";
+  if(!email || !pass) return;
+  if(typeof firebase === "undefined" || !firebase.auth){
+    errEl.textContent = "Sign-in isn't available right now.";
+    errEl.style.display = "block";
+    return;
+  }
+  firebase.auth().signInWithEmailAndPassword(email, pass).catch(function(err){
+    errEl.textContent = "Couldn't sign in — check the email and password.";
+    errEl.style.display = "block";
+  });
+}
+
+initSync();
+</script>
+</body>
+</html>
